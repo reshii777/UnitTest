@@ -3,8 +3,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-// Класс имитирующий подключение к базе данных
-class DVConnection {
+// Интерфейс подключения к базе данных
+class DBConnection {
 public:
     virtual void open() = 0;
     virtual void close() = 0;
@@ -14,52 +14,59 @@ public:
 // Класс, использующий подключение к базе данных
 class ClassThatUsesDB {
 private:
-    DVConnection* dbConnection;
+    DBConnection* connection;
 
 public:
-    ClassThatUsesDB(DVConnection* conn) : dbConnection(conn) {}
+    ClassThatUsesDB(DBConnection* conn) : connection(conn) {}
 
     void openConnection() {
-        dbConnection->open();
+        connection->open();
     }
 
     void useConnection() {
-        dbConnection->execQuery("SELECT * FROM some_table");
+        connection->execQuery("SELECT * FROM table");
     }
 
     void closeConnection() {
-        dbConnection->close();
+        connection->close();
     }
 };
 
-// Мок-класс для имитации подключения к базе данных
-class MockDVConnection : public DVConnection {
+// Мок-класс для тестирования
+class MockDBConnection : public DBConnection {
 public:
-    MOCK_METHOD(void, open, (), (override));
-    MOCK_METHOD(void, close, (), (override));
-    MOCK_METHOD(void, execQuery, (const std::string& query), (override));
+    MOCK_METHOD0(open, void());
+    MOCK_METHOD0(close, void());
+    MOCK_METHOD1(execQuery, void(const std::string&));
+};
+
+// Тестирующий класс
+class ClassThatUsesDBTest : public testing::Test {
+protected:
+    MockDBConnection mockConnection;
+    ClassThatUsesDB classUsingMock{ &mockConnection };
 };
 
 // Тесты
-TEST(ClassThatUsesDBTest, TestDatabaseConnection) {
-    MockDVConnection mockConnection;
-    ClassThatUsesDB classUnderTest(&mockConnection);
+TEST_F(ClassThatUsesDBTest, TestOpenConnection) {
+    EXPECT_CALL(mockConnection, open()).Times(1);
 
-    EXPECT_CALL(mockConnection, open())
-        .Times(1);
+    classUsingMock.openConnection();
+}
 
-    EXPECT_CALL(mockConnection, execQuery("SELECT * FROM some_table"))
-        .Times(1);
+TEST_F(ClassThatUsesDBTest, TestUseConnection) {
+    EXPECT_CALL(mockConnection, execQuery("SELECT * FROM table")).Times(1);
 
-    EXPECT_CALL(mockConnection, close())
-        .Times(1);
+    classUsingMock.useConnection();
+}
 
-    classUnderTest.openConnection();
-    classUnderTest.useConnection();
-    classUnderTest.closeConnection();
+TEST_F(ClassThatUsesDBTest, TestCloseConnection) {
+    EXPECT_CALL(mockConnection, close()).Times(1);
+
+    classUsingMock.closeConnection();
 }
 
 int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
+    testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
